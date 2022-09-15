@@ -6,7 +6,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <malloc.h>
-#include <math.h>
 
 // keys: 107 = mouse1, 108 = mouse2, 109 = mouse3, 110 = mouse4, 111 = mouse5
 #define AIMKEY 111
@@ -33,9 +32,26 @@ typedef struct
 	float x, y, z;
 } vec3;
 
+float qsqrt(float x)
+{
+	union
+	{
+		int i;
+		float f;
+	} u;
+
+	u.f = x;
+	u.i = (1 << 29) + (u.i >> 1) - (1 << 22);
+
+	u.f = u.f + x / u.f;
+	u.f = 0.25f * u.f + x / u.f;
+
+	return u.f;
+}
+
 float vec_length_sqrt(vec3 p0)
 {
-	return (float)sqrt(p0.x * p0.x + p0.y * p0.y + p0.z * p0.z);
+	return (float)qsqrt(p0.x * p0.x + p0.y * p0.y + p0.z * p0.z);
 }
 
 vec3 vec_sub(vec3 p0, vec3 p1)
@@ -46,6 +62,18 @@ vec3 vec_sub(vec3 p0, vec3 p1)
 	r.y = p0.y - p1.y;
 	r.z = p0.z - p1.z;
 	return r;
+}
+
+float qfloor(float x)
+{
+	if (x >= 0.0f)
+		return (float)((int)x);
+	return (float)((int)x - 1);
+}
+
+float qfmodf(float a, float b)
+{
+	return (a - b * qfloor(a / b));
 }
 
 void vec_clamp(vec3 *v)
@@ -63,31 +91,75 @@ void vec_clamp(vec3 *v)
 	{
 		v->x = -89.0f;
 	}
-	v->y = fmodf(v->y + 180, 360) - 180;
+	v->y = qfmodf(v->y + 180, 360) - 180;
 	v->z = 0;
 }
 
+#define X_PI 3.14159f 
+#define X_DIV 57.29577f
+#define qabs(x) ((x) < 0 ? -(x) : (x))
+#define qmax(a, b) (((a) > (b)) ? (a) : (b))
+#define qmin(a, b) (((a) < (b)) ? (a) : (b))
+
+float qatan2(float y, float x)
+{
+	float t0, t1, t3, t4;
+	t3 = qabs(x);
+	t1 = qabs(y);
+	t0 = qmax(t3, t1);
+	t1 = qmin(t3, t1);
+	t3 = 1 / t0;
+	t3 = t1 * t3;
+
+	t4 = t3 * t3;
+	t0 = -0.0134804f;
+	t0 = t0 * t4 + 0.05747f;
+	t0 = t0 * t4 - 0.12123f;
+	t0 = t0 * t4 + 0.19563f;
+	t0 = t0 * t4 - 0.33299f;
+	t0 = t0 * t4 + 0.99999f;
+	t3 = t0 * t3;
+
+	t3 = (qabs(y) > qabs(x)) ? 1.57079f - t3 : t3;
+	t3 = (x < 0) ? X_PI - t3 : t3;
+	t3 = (y < 0) ? -t3 : t3;
+
+	return t3;
+}
 float vec_distance(vec3 p0, vec3 p1)
 {
 	return vec_length_sqrt(vec_sub(p0, p1));
 }
 
+float qatan(float x)
+{
+	return qatan2(x, 1);
+}
+
+#define M_PI 3.14159265358979323846264338327950288
 vec3 CalcAngle(vec3 src, vec3 dst)
 {
 	vec3 angle;
 
 	vec3 delta = vec_sub(src, dst);
 
-	float hyp = sqrt(delta.x * delta.x + delta.y * delta.y);
+	float hyp = qsqrt(delta.x * delta.x + delta.y * delta.y);
 
-	angle.x = atan(delta.z / hyp) * (float)(180.0 / M_PI);
-	angle.y = atan(delta.y / delta.x) * (float)(180.0 / M_PI);
+	angle.x = qatan(delta.z / hyp) * (float)(180.0 / M_PI);
+	angle.y = qatan(delta.y / delta.x) * (float)(180.0 / M_PI);
 	angle.z = 0;
 
 	if (delta.x >= 0.0)
 		angle.y += 180.0f;
 
 	return angle;
+}
+
+double qpow(double a, double b) {
+	double c = 1;
+	for (int i = 0; i < b; i++)
+		c *= a;
+	return c;
 }
 
 float get_fov(vec3 scrangles, vec3 aimangles)
@@ -103,11 +175,11 @@ float get_fov(vec3 scrangles, vec3 aimangles)
 	if (delta.x < 0)
 		delta.x = -delta.x;
 
-	delta.y = fmodf(delta.y + 180, 360) - 180;
+	delta.y = qfmodf(delta.y + 180, 360) - 180;
 	if (delta.y < 0)
 		delta.y = -delta.y;
 
-	return sqrt((float)(pow(delta.x, 2.0) + pow(delta.y, 2.0)));
+	return qsqrt((float)(qpow(delta.x, 2.0) + qpow(delta.y, 2.0)));
 }
 
 QWORD rx_dump_module(rx_handle process, QWORD base);
@@ -153,6 +225,14 @@ int GetApexProcessId(void)
 				}
 			}
 			rx_close_handle(snapshot_2);
+
+			//
+			// process found
+			//
+			if (pid != 0)
+			{
+				break;
+			}
 		}
 	}
 	rx_close_handle(snapshot);
@@ -309,11 +389,12 @@ int main(void)
 
 	//
 	// get base address
+	// in case this function doesn't work, use QWORD base_module = 0x140000000;
 	//
 	QWORD base_module = GetApexBaseAddress(pid);
 	if (base_module == 0)
 	{
-		base_module = 0x140000000;
+		return 0;
 	}
 
 	printf("[+] r5apex.exe base [0x%lx]\n", base_module);
@@ -752,10 +833,10 @@ int main(void)
 					sy = y;
 				}
 
-				if (abs((int)sx) > 100)
+				if (qabs((int)sx) > 100)
 					continue;
 
-				if (abs((int)sy) > 100)
+				if (qabs((int)sy) > 100)
 					continue;
 
 				DWORD current_tick = rx_read_i32(r5apex, IInputSystem + 0xcd8);
