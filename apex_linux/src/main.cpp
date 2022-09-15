@@ -22,11 +22,6 @@ typedef const char *PCSTR;
 typedef const unsigned short *PCWSTR;
 typedef void *PVOID;
 
-//
-// some windows extensions for rx library
-// these are required because we are working with PE images
-//
-
 typedef struct
 {
 	float x, y, z;
@@ -182,6 +177,10 @@ float get_fov(vec3 scrangles, vec3 aimangles)
 	return qsqrt((float)(qpow(delta.x, 2.0) + qpow(delta.y, 2.0)));
 }
 
+//
+// some windows extensions for rx library
+// these are required because we are working with PE images
+//
 QWORD rx_dump_module(rx_handle process, QWORD base);
 void rx_free_module(QWORD dumped_module);
 QWORD rx_scan_pattern(QWORD dumped_module, PCSTR pattern, PCSTR mask, QWORD length);
@@ -190,10 +189,7 @@ DWORD rx_read_i32(rx_handle process, QWORD address);
 WORD rx_read_i16(rx_handle process, QWORD address);
 BYTE rx_read_i8(rx_handle process, QWORD address);
 float rx_read_float(rx_handle process, QWORD address);
-BOOL rx_write_i32(rx_handle process, QWORD address, DWORD value)
-{
-	return rx_write_process(process, address, &value, sizeof(value)) == sizeof(value);
-}
+BOOL rx_write_i32(rx_handle process, QWORD address, DWORD value);
 
 QWORD ResolveRelativeAddressEx(
     rx_handle process,
@@ -894,6 +890,11 @@ float rx_read_float(rx_handle process, QWORD address)
 	float buffer = 0;
 	rx_read_process(process, address, &buffer, sizeof(buffer));
 	return buffer;
+}
+
+BOOL rx_write_i32(rx_handle process, QWORD address, DWORD value)
+{
+	return rx_write_process(process, address, &value, sizeof(value)) == sizeof(value);
 }
 
 QWORD ResolveRelativeAddressEx(
