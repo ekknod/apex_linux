@@ -382,16 +382,8 @@ int main(void)
 	}
 
 	printf("[+] r5apex.exe pid [%d]\n", pid);
-
-	//
-	// get base address
-	// in case this function doesn't work, use QWORD base_module = 0x140000000;
-	//
-	QWORD base_module = GetApexBaseAddress(pid);
-	if (base_module == 0)
-	{
-		return 0;
-	}
+	
+	QWORD base_module = 0x140000000;
 
 	printf("[+] r5apex.exe base [0x%lx]\n", base_module);
 
